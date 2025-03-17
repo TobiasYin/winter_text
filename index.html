@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简易文本编辑器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .toolbar {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        
+        .toolbar button, .toolbar select, .toolbar input {
+            margin-right: 10px;
+            padding: 5px 10px;
+        }
+        
+        #editor {
+            border: 1px solid #ccc;
+            min-height: 200px;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            overflow-y: auto;
+        }
+        
+        #output {
+            width: 100%;
+            min-height: 150px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        /* 添加复制按钮的样式 */
+        .output-container {
+            position: relative;
+        }
+        
+        #copyBtn {
+            position: absolute;
+            right: 10px;
+            top: -30px;
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        #copyBtn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>简易文本编辑器</h1>
+    
+    <div class="toolbar">
+        <button id="italicBtn">斜体</button>
+        <button id="underlineBtn">下划线</button>
+        
+        <select id="fontSize">
+            <option value="12">12px</option>
+            <option value="14">14px</option>
+            <option value="16" selected>16px</option>
+            <option value="18">18px</option>
+            <option value="24">24px</option>
+            <option value="36">36px</option>
+            <option value="48">48px</option>
+            <option value="72">72px</option>
+            <option value="80">80px</option>
+            <option value="120">120px</option>
+            <option value="150">150px</option>
+        </select>
+        
+        <input type="color" id="fontColor" value="#000000">
+    </div>
+    
+    <div id="editor" contenteditable="true">在这里输入文字...</div>
+    
+    <div>
+        <h3>生成的代码：</h3>
+        <div class="output-container">
+            <button id="copyBtn">复制代码</button>
+            <textarea id="output" readonly></textarea>
+        </div>
+    </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const editor = document.getElementById('editor');
+        const output = document.getElementById('output');
+        const italicBtn = document.getElementById('italicBtn');
+        const underlineBtn = document.getElementById('underlineBtn');
+        const fontSize = document.getElementById('fontSize');
+        const fontColor = document.getElementById('fontColor');
+        const copyBtn = document.getElementById('copyBtn');
+        
+        // 添加复制功能
+        copyBtn.addEventListener('click', function() {
+            output.select();
+            document.execCommand('copy');
+            
+            // 显示复制成功提示
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = '复制成功！';
+            copyBtn.style.backgroundColor = '#45a049';
+            
+            // 2秒后恢复按钮原始状态
+            setTimeout(() => {
+                copyBtn.textContent = originalText;
+                copyBtn.style.backgroundColor = '#4CAF50';
+            }, 2000);
+        });
+        
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function() {
+                const context = this;
+                const args = arguments;
+                clearTimeout(timeout);
+                timeout = setTimeout(function() {
+                    func.apply(context, args);
+                }, wait);
+            };
+        }
+        
+        // 计算字体大小：size * 16
+        const calculateFontSize = function(size) {
+            return (parseInt(size) * 16).toString();
+        };
+        
+        // 直接将HTML实体转换回原始字符
+        function decodeHTMLEntities(text) {
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = text;
+            return textarea.value;
+        };
+        
+        // 移除HTML注释
+        function removeHtmlComments(html) {
+            return html.replace(/<!--[\s\S]*?-->/g, '');
+        };
+        
+        // 修复错误的结束标签格式 - 增强版
+        function fixMalformedTags(html) {
+            // 将 </sũŚe=72> 这类带属性的结束标签修正为 </sũŚe>
+            html = html.replace(/<\/([^\s>]+)[^>]*>/g, "</$1>");
+            
+            return html;
+        }
+        
+        // 直接处理HTML字符串，而不是DOM操作
+        function processHTMLWithRegExp(html) {
+            console.log("原始HTML:", html);
+            
+            // 移除HTML注释
+            html = removeHtmlComments(html);
+            
+            // 保留原始的自定义标签
+            const preserveMap = {};
+            let preserveCount = 0;
+            
+            // 保存已有的自定义标签避免被处理
+            const customTagPattern = /<(ł|ũ|sũŚe=\d+|cůlor=[^>]+)>|<\/(ł|ũ|sũŚe|cůlor)>/g;
+            html = html.replace(customTagPattern, function(match) {
+                const id = `__PRESERVE_${preserveCount++}__`;
+                preserveMap[id] = match;
+                return id;
+            });
+            
+            // 处理font标签的颜色属性（包括嵌套的情况）
+            html = html.replace(/<font[^>]*?color=["']([^"']+)["'][^>]*>([\s\S]*?)<\/font>/gi, 
+                              function(match, color, content) {
+                                  // 如果内容中包含font-size，需要特殊处理
+                                  if (content.includes('font-size')) {
+                                      // 先处理内部的font-size
+                                      const processedContent = content.replace(
+                                          /<font [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/font>/gi,
+                                          (m, size, innerContent) => `<sũŚe=${size}>${innerContent}</sũŚe>`
+                                      );
+                                      return `<cůlor=${color}>${processedContent}</cůlor>`;
+                                  }
+                                  return `<cůlor=${color}>${content}</cůlor>`;
+                              });
+            
+            // 更灵活地处理font-size (匹配各种可能的写法)
+            const fontSizePatterns = [
+                // 标准的span style写法
+                /<span style="font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/span>/gi,
+                // 先style后其他属性
+                /<span [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/span>/gi,
+                // font标签的size属性
+                /<font size="(\d+)"[^>]*>([\s\S]*?)<\/font>/gi,
+                // font标签的style属性
+                /<font [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/font>/gi
+            ];
+            
+            // 应用所有字体大小模式，同时保留可能存在的color标签
+            fontSizePatterns.forEach(pattern => {
+                html = html.replace(pattern, (match, size, content) => {
+                    const fontSize = pattern.toString().includes("font size") ? 
+                                    calculateFontSize(size) : size;
+                    // 检查内容中是否已经有color标签
+                    if (content.includes('<cůlor=')) {
+                        // 如果内容中已经有color标签，保持color标签在外层
+                        return content.replace(/<cůlor=([^>]+)>([\s\S]*?)<\/cůlor>/g, 
+                            (m, color, innerContent) => `<cůlor=${color}><sũŚe=${fontSize}>${innerContent}</sũŚe></cůlor>`
+                        );
+                    } else {
+                        return `<sũŚe=${fontSize}>${content}</sũŚe>`;
+                    }
+                });
+            });
+            
+            // 处理斜体
+            html = html.replace(/<i>([\s\S]*?)<\/i>/gi, '<ł>$1</ł>');
+            
+            // 处理下划线
+            html = html.replace(/<u>([\s\S]*?)<\/u>/gi, '<ũ>$1</ũ>');
+            
+            // 清理剩余的HTML标签，但保留已处理的标签
+            html = html.replace(/<\/?span[^>]*>/gi, '');
+            html = html.replace(/<\/?div[^>]*>/gi, '');
+            html = html.replace(/<br\s*\/?>/gi, '\n');
+            html = html.replace(/<\/?p[^>]*>/gi, '\n');
+            
+            // 恢复之前保存的自定义标签
+            for (const [id, originalTag] of Object.entries(preserveMap)) {
+                html = html.replace(id, originalTag);
+            }
+            
+            // 修复可能的格式问题
+            html = fixMalformedTags(html);
+            
+            // 添加缺失的结束标签
+            const tags = ['ł', 'ũ', 'sũŚe', 'cůlor'];
+            tags.forEach(tag => {
+                const openPattern = new RegExp(`<${tag}[^>]*>`, 'g');
+                const closePattern = new RegExp(`</${tag}>`, 'g');
+                
+                const openMatches = (html.match(openPattern) || []).length;
+                const closeMatches = (html.match(closePattern) || []).length;
+                
+                if (openMatches > closeMatches) {
+                    for (let i = 0; i < openMatches - closeMatches; i++) {
+                        html += `</${tag}>`;
+                    }
+                }
+            });
+            
+            console.log("处理后HTML:", html);
+            return html;
+        }
+        
+        // 清除初始文本
+        editor.addEventListener('focus', function() {
+            if (editor.textContent === '在这里输入文字...') {
+                editor.textContent = '';
+                generateHTML(); // 清除初始文本后更新输出
+            }
+        }, { once: true });
+        
+        // 应用斜体格式
+        italicBtn.addEventListener('click', function() {
+            document.execCommand('italic', false, null);
+            editor.focus();
+            generateHTML(); // 应用斜体后更新输出
+        });
+        
+        // 应用下划线格式
+        underlineBtn.addEventListener('click', function() {
+            document.execCommand('underline', false, null);
+            editor.focus();
+            generateHTML(); // 应用下划线后更新输出
+        });
+        
+        // 应用字体大小 - 修正版本，处理InvalidStateError错误
+        fontSize.addEventListener('change', function() {
+            try {
+                // 尝试使用更安全的方法应用字体大小
+                document.execCommand('fontSize', false, '7'); // 使用临时大小7
+                
+                // 然后替换为实际的像素大小
+                const fontElements = editor.querySelectorAll('font[size="7"]');
+                
+                fontElements.forEach(element => {
+                    element.removeAttribute('size');
+                    element.style.fontSize = `${fontSize.value}px`;
+                });
+                
+                editor.focus();
+                generateHTML(); // 应用字体大小后更新输出
+            } catch (error) {
+                console.error('应用字体大小时出错:', error);
+                // 备用方法：直接使用CSS
+                document.execCommand('styleWithCSS', false, true);
+                document.execCommand('fontSize', false, fontSize.value + 'px');
+                document.execCommand('styleWithCSS', false, false);
+                editor.focus();
+                generateHTML(); // 备用方法后更新输出
+            }
+        });
+        
+        // 应用字体颜色
+        fontColor.addEventListener('input', function() {
+            document.execCommand('foreColor', false, fontColor.value);
+            editor.focus();
+            generateHTML(); // 应用颜色后更新输出
+        });
+        
+        // 输入事件使用防抖来提高性能
+        editor.addEventListener('input', debounce(function() {
+            generateHTML();
+        }, 300)); // 300毫秒的防抖延迟
+        
+        // 各种编辑操作后自动更新
+        editor.addEventListener('keyup', debounce(function() {
+            generateHTML();
+        }, 300));
+        
+        // 鼠标释放后可能进行了选择和格式化，需要更新
+        editor.addEventListener('mouseup', debounce(function() {
+            generateHTML();
+        }, 300));
+        
+        // 生成HTML代码的核心函数 - 完全重写
+        function generateHTML() {
+            // 如果编辑器为空，清空输出
+            if (editor.innerHTML.trim() === '') {
+                output.value = '';
+                return;
+            }
+            
+            // 使用纯文本处理方式
+            const htmlContent = processHTMLWithRegExp(editor.innerHTML);
+            
+            // 直接给textarea赋值，避免自动转义
+            output.value = decodeHTMLEntities(htmlContent);
+        }
+    });
+    </script>
+</body>
+</html> 
