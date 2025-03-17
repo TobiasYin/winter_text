@@ -70,7 +70,6 @@
     
     <div class="toolbar">
         <button id="italicBtn">斜体</button>
-        <button id="underlineBtn">下划线</button>
         
         <select id="fontSize">
             <option value="12">12px</option>
@@ -104,7 +103,6 @@
         const editor = document.getElementById('editor');
         const output = document.getElementById('output');
         const italicBtn = document.getElementById('italicBtn');
-        const underlineBtn = document.getElementById('underlineBtn');
         const fontSize = document.getElementById('fontSize');
         const fontColor = document.getElementById('fontColor');
         const copyBtn = document.getElementById('copyBtn');
@@ -176,12 +174,15 @@
             let preserveCount = 0;
             
             // 保存已有的自定义标签避免被处理
-            const customTagPattern = /<(ł|ũ|sũŚe=\d+|cůlor=[^>]+)>|<\/(ł|ũ|sũŚe|cůlor)>/g;
+            const customTagPattern = /<(ũ|sũŚe=\d+|cůlor=[^>]+)>|<\/(ũ|sũŚe|cůlor)>/g;
             html = html.replace(customTagPattern, function(match) {
                 const id = `__PRESERVE_${preserveCount++}__`;
                 preserveMap[id] = match;
                 return id;
             });
+            
+            // 先处理斜体标签，因为它可能嵌套在其他标签内
+            html = html.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '<ũ>$1</ũ>');
             
             // 处理同时包含color和font-size的font标签
             html = html.replace(/<font([^>]*?)>([\s\S]*?)<\/font>/gi, function(match, attrs, content) {
@@ -198,7 +199,7 @@
                     // 只有字体大小
                     return `<sũŚe=${fontSize[1]}>${content}</sũŚe>`;
                 }
-                return match; // 如果没有匹配到任何属性，保持原样
+                return match;
             });
             
             // 处理其他可能的font-size格式
@@ -208,7 +209,9 @@
                 // 先style后其他属性
                 /<span [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/span>/gi,
                 // font标签的size属性
-                /<font size="(\d+)"[^>]*>([\s\S]*?)<\/font>/gi
+                /<font size="(\d+)"[^>]*>([\s\S]*?)<\/font>/gi,
+                // 处理带style的i标签的font-size
+                /<i [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/i>/gi
             ];
             
             // 应用所有字体大小模式
@@ -220,9 +223,6 @@
                 });
             });
             
-            // 处理斜体
-            html = html.replace(/<i>([\s\S]*?)<\/i>/gi, '<ł>$1</ł>');
-            
             // 处理下划线
             html = html.replace(/<u>([\s\S]*?)<\/u>/gi, '<ũ>$1</ũ>');
             
@@ -231,6 +231,8 @@
             html = html.replace(/<\/?div[^>]*>/gi, '');
             html = html.replace(/<br\s*\/?>/gi, '\n');
             html = html.replace(/<\/?p[^>]*>/gi, '\n');
+            html = html.replace(/<\/?font[^>]*>/gi, '');
+            html = html.replace(/<\/?i[^>]*>/gi, '');
             
             // 恢复之前保存的自定义标签
             for (const [id, originalTag] of Object.entries(preserveMap)) {
@@ -241,7 +243,7 @@
             html = fixMalformedTags(html);
             
             // 添加缺失的结束标签
-            const tags = ['ł', 'ũ', 'sũŚe', 'cůlor'];
+            const tags = ['ũ', 'sũŚe', 'cůlor'];
             tags.forEach(tag => {
                 const openPattern = new RegExp(`<${tag}[^>]*>`, 'g');
                 const closePattern = new RegExp(`</${tag}>`, 'g');
@@ -273,13 +275,6 @@
             document.execCommand('italic', false, null);
             editor.focus();
             generateHTML(); // 应用斜体后更新输出
-        });
-        
-        // 应用下划线格式
-        underlineBtn.addEventListener('click', function() {
-            document.execCommand('underline', false, null);
-            editor.focus();
-            generateHTML(); // 应用下划线后更新输出
         });
         
         // 应用字体大小 - 修正版本，处理InvalidStateError错误
