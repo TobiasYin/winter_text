@@ -183,47 +183,40 @@
                 return id;
             });
             
-            // 处理font标签的颜色属性（包括嵌套的情况）
-            html = html.replace(/<font[^>]*?color=["']([^"']+)["'][^>]*>([\s\S]*?)<\/font>/gi, 
-                              function(match, color, content) {
-                                  // 如果内容中包含font-size，需要特殊处理
-                                  if (content.includes('font-size')) {
-                                      // 先处理内部的font-size
-                                      const processedContent = content.replace(
-                                          /<font [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/font>/gi,
-                                          (m, size, innerContent) => `<sũŚe=${size}>${innerContent}</sũŚe>`
-                                      );
-                                      return `<cůlor=${color}>${processedContent}</cůlor>`;
-                                  }
-                                  return `<cůlor=${color}>${content}</cůlor>`;
-                              });
+            // 处理同时包含color和font-size的font标签
+            html = html.replace(/<font([^>]*?)>([\s\S]*?)<\/font>/gi, function(match, attrs, content) {
+                let color = attrs.match(/color=["']([^"']+)["']/);
+                let fontSize = attrs.match(/style=["'][^"']*font-size:\s*(\d+)px/);
+                
+                if (color && fontSize) {
+                    // 同时有颜色和字体大小
+                    return `<cůlor=${color[1]}><sũŚe=${fontSize[1]}>${content}</sũŚe></cůlor>`;
+                } else if (color) {
+                    // 只有颜色
+                    return `<cůlor=${color[1]}>${content}</cůlor>`;
+                } else if (fontSize) {
+                    // 只有字体大小
+                    return `<sũŚe=${fontSize[1]}>${content}</sũŚe>`;
+                }
+                return match; // 如果没有匹配到任何属性，保持原样
+            });
             
-            // 更灵活地处理font-size (匹配各种可能的写法)
+            // 处理其他可能的font-size格式
             const fontSizePatterns = [
                 // 标准的span style写法
                 /<span style="font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/span>/gi,
                 // 先style后其他属性
                 /<span [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/span>/gi,
                 // font标签的size属性
-                /<font size="(\d+)"[^>]*>([\s\S]*?)<\/font>/gi,
-                // font标签的style属性
-                /<font [^>]*style="[^"]*font-size:\s*(\d+)px[^"]*"[^>]*>([\s\S]*?)<\/font>/gi
+                /<font size="(\d+)"[^>]*>([\s\S]*?)<\/font>/gi
             ];
             
-            // 应用所有字体大小模式，同时保留可能存在的color标签
+            // 应用所有字体大小模式
             fontSizePatterns.forEach(pattern => {
                 html = html.replace(pattern, (match, size, content) => {
                     const fontSize = pattern.toString().includes("font size") ? 
                                     calculateFontSize(size) : size;
-                    // 检查内容中是否已经有color标签
-                    if (content.includes('<cůlor=')) {
-                        // 如果内容中已经有color标签，保持color标签在外层
-                        return content.replace(/<cůlor=([^>]+)>([\s\S]*?)<\/cůlor>/g, 
-                            (m, color, innerContent) => `<cůlor=${color}><sũŚe=${fontSize}>${innerContent}</sũŚe></cůlor>`
-                        );
-                    } else {
-                        return `<sũŚe=${fontSize}>${content}</sũŚe>`;
-                    }
+                    return `<sũŚe=${fontSize}>${content}</sũŚe>`;
                 });
             });
             
